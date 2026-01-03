@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   EnvelopeIcon,
@@ -197,6 +197,17 @@ const ResumeTab = ({ user, isEditing, setIsEditing }) => {
   const [newSkill, setNewSkill] = useState('');
   const [newCert, setNewCert] = useState({ name: '', issuingOrganization: '', issueDate: '' });
   const { updateUser } = useAuthStore();
+
+  // Sync formData when user prop changes
+  useEffect(() => {
+    setFormData({
+      about: user?.about || '',
+      whatILoveAboutJob: user?.whatILoveAboutJob || '',
+      interestsAndHobbies: user?.interestsAndHobbies || '',
+      skills: user?.skills || [],
+      certifications: user?.certifications || []
+    });
+  }, [user]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -515,6 +526,21 @@ const PrivateInfoTab = ({ user, isEditing, setIsEditing }) => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const { updateUser } = useAuthStore();
+
+  // Sync formData when user prop changes
+  useEffect(() => {
+    setFormData({
+      dateOfBirth: user?.dateOfBirth?.split('T')[0] || '',
+      gender: user?.gender || '',
+      maritalStatus: user?.maritalStatus || '',
+      nationality: user?.nationality || '',
+      personalEmail: user?.personalEmail || '',
+      address: user?.address || {},
+      bankDetails: user?.bankDetails || {},
+      panNumber: user?.panNumber || '',
+      uanNumber: user?.uanNumber || ''
+    });
+  }, [user]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;

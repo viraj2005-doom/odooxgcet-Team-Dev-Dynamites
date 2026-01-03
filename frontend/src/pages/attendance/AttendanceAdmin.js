@@ -8,7 +8,7 @@ import {
   ArrowDownTrayIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
-import { attendanceAPI, usersAPI } from '../../services/api';
+import { attendanceAPI, usersAPI, getImageUrl } from '../../services/api';
 import { PageLoader } from '../../components/common/LoadingSpinner';
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 
@@ -272,7 +272,7 @@ const AttendanceAdmin = () => {
                       <div className="flex items-center gap-3">
                         {record.user?.profilePicture ? (
                           <img 
-                            src={record.user.profilePicture} 
+                            src={getImageUrl(record.user.profilePicture)} 
                             alt="" 
                             className="h-8 w-8 rounded-full object-cover"
                           />

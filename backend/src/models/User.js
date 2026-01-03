@@ -267,7 +267,13 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 userSchema.methods.generateEmailVerificationToken = function() {
   const crypto = require('crypto');
   const token = crypto.randomBytes(32).toString('hex');
-  this.emailVerificationToken = crypto.createHash('sha256').update(token).digest('hex');
+  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+  
+  console.log('🔐 Token Generation Debug:');
+  console.log('   Raw token (first 20 chars):', token.substring(0, 20) + '...');
+  console.log('   Hashed token (first 20 chars):', hashedToken.substring(0, 20) + '...');
+  
+  this.emailVerificationToken = hashedToken;
   this.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
   return token;
 };

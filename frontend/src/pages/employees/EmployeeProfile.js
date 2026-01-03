@@ -10,7 +10,7 @@ import {
   BanknotesIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
-import { usersAPI } from '../../services/api';
+import { usersAPI, getImageUrl } from '../../services/api';
 import useAuthStore from '../../store/authStore';
 import { PageLoader } from '../../components/common/LoadingSpinner';
 import { format } from 'date-fns';
@@ -94,7 +94,7 @@ const EmployeeProfile = () => {
           {/* Profile Picture */}
           {employee.profilePicture ? (
             <img
-              src={employee.profilePicture}
+              src={getImageUrl(employee.profilePicture)}
               alt={employee.fullName}
               className="h-28 w-28 rounded-full object-cover ring-4 ring-gray-100"
             />

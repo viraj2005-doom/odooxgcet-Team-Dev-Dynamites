@@ -7,7 +7,7 @@ import {
   CalendarDaysIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
-import { timeOffAPI } from '../../services/api';
+import { timeOffAPI, getImageUrl } from '../../services/api';
 import LoadingSpinner, { PageLoader } from '../../components/common/LoadingSpinner';
 import Modal from '../../components/common/Modal';
 import { format, differenceInDays } from 'date-fns';
@@ -29,8 +29,19 @@ const TimeOffApprovals = () => {
     try {
       setIsLoading(true);
       const response = await timeOffAPI.getAllRequests({ status: filter !== 'all' ? filter : undefined });
-      setRequests(response.data.data);
+      // Handle both array response and nested object response
+      const data = response.data.data;
+      if (Array.isArray(data)) {
+        setRequests(data);
+      } else if (data?.requests) {
+        // Backend returns grouped requests - get the 'all' array or filter by status
+        const allRequests = data.requests.all || [];
+        setRequests(allRequests);
+      } else {
+        setRequests([]);
+      }
     } catch (error) {
+      console.error('TimeOff fetch error:', error);
       toast.error('Failed to fetch requests');
     } finally {
       setIsLoading(false);
@@ -155,7 +166,7 @@ const TimeOffApprovals = () => {
                   <div className="flex items-center gap-3">
                     {request.user?.profilePicture ? (
                       <img 
-                        src={request.user.profilePicture} 
+                        src={getImageUrl(request.user.profilePicture)} 
                         alt="" 
                         className="h-10 w-10 rounded-full object-cover"
                       />

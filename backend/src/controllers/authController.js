@@ -82,7 +82,14 @@ const registerCompany = async (req, res, next) => {
     let verificationUrl = null;
     
     const verificationToken = admin.generateEmailVerificationToken();
+    
+    console.log('🔐 Before save - emailVerificationToken stored:', admin.emailVerificationToken?.substring(0, 20) + '...');
+    
     await admin.save();
+    
+    // Verify token was saved
+    const savedAdmin = await User.findById(admin._id).select('+emailVerificationToken +emailVerificationExpires');
+    console.log('🔐 After save - emailVerificationToken in DB:', savedAdmin?.emailVerificationToken?.substring(0, 20) + '...');
     
     verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
 
@@ -302,11 +309,22 @@ const verifyEmail = async (req, res, next) => {
       });
     }
 
-    console.log('📧 Verification attempt with token:', token.substring(0, 10) + '...');
+    console.log('📧 Verification attempt with raw token:', token.substring(0, 20) + '...');
+    console.log('📧 Token length:', token.length);
 
     // Hash the token
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-    console.log('📧 Hashed token:', hashedToken.substring(0, 10) + '...');
+    console.log('📧 Hashed token (for lookup):', hashedToken.substring(0, 20) + '...');
+
+    // List all users with verification tokens for debugging
+    const usersWithTokens = await User.find({ 
+      emailVerificationToken: { $exists: true, $ne: null } 
+    }).select('email emailVerificationToken emailVerificationExpires');
+    
+    console.log('📧 Users with verification tokens in DB:', usersWithTokens.length);
+    usersWithTokens.forEach(u => {
+      console.log(`   - ${u.email}: token=${u.emailVerificationToken?.substring(0, 20)}..., expires=${u.emailVerificationExpires}`);
+    });
 
     // Find user with valid token
     const user = await User.findOne({
@@ -325,7 +343,8 @@ const verifyEmail = async (req, res, next) => {
         });
       }
       
-      console.log('📧 No user found with this token');
+      console.log('📧 No user found with this hashed token');
+      console.log('📧 Looking for hash:', hashedToken);
       return res.status(400).json({
         success: false,
         message: 'Invalid verification token. Please request a new verification link.'

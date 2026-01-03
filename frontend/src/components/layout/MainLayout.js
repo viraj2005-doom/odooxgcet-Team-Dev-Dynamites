@@ -14,6 +14,7 @@ import {
 } from '@heroicons/react/24/outline';
 import useAuthStore from '../../store/authStore';
 import useNotificationStore from '../../store/notificationStore';
+import { getImageUrl } from '../../services/api';
 
 const MainLayout = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -126,7 +127,7 @@ const MainLayout = () => {
                 <Menu.Button className="flex items-center space-x-2 p-1 rounded-full hover:bg-gray-100">
                   {user?.profilePicture ? (
                     <img
-                      src={user.profilePicture}
+                      src={getImageUrl(user.profilePicture)}
                       alt={user.fullName}
                       className="h-8 w-8 rounded-full object-cover"
                     />

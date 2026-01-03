@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { CheckCircleIcon, XCircleIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
 import { authAPI } from '../../services/api';
@@ -11,11 +11,13 @@ const VerifyEmail = () => {
   const [message, setMessage] = useState('');
   const [email, setEmail] = useState('');
   const [isResending, setIsResending] = useState(false);
+  const hasVerified = useRef(false);
 
   useEffect(() => {
-    if (token) {
+    if (token && !hasVerified.current) {
+      hasVerified.current = true;
       verifyEmail();
-    } else {
+    } else if (!token) {
       setStatus('resend');
     }
   }, [token]);

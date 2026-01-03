@@ -124,20 +124,96 @@ const Salary = () => {
 
   const handleDownloadPayslip = async () => {
     try {
-      const currentMonth = format(new Date(), 'yyyy-MM');
-      const response = await payrollAPI.getPayslip(employeeId, currentMonth);
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1;
+      const currentYear = now.getFullYear();
+      const response = await payrollAPI.getPayslip(employeeId, { month: currentMonth, year: currentYear });
+      const payslip = response.data.data;
+      
+      // Format payslip as readable text
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      const monthName = monthNames[currentMonth - 1];
+      
+      let textContent = `
+================================================================================
+                              PAYSLIP
+================================================================================
+
+Company: ${payslip.company?.name || 'N/A'}
+Employee: ${payslip.employee?.name || employee?.firstName + ' ' + employee?.lastName || 'N/A'}
+Employee Code: ${payslip.employee?.employeeCode || 'N/A'}
+Pay Period: ${monthName} ${currentYear}
+
+--------------------------------------------------------------------------------
+                            EARNINGS
+--------------------------------------------------------------------------------
+
+Basic Salary:                                    ₹${(payslip.earnings?.basicSalary || salaryData.monthlyWage || 0).toLocaleString('en-IN')}
+`;
+
+      // Add salary components
+      if (payslip.earnings?.components) {
+        payslip.earnings.components.forEach(comp => {
+          const name = comp.name.padEnd(45);
+          textContent += `${name} ₹${(comp.amount || 0).toLocaleString('en-IN')}\n`;
+        });
+      } else if (salaryData.components) {
+        salaryData.components.forEach(comp => {
+          const amount = comp.type === 'percentage' 
+            ? (salaryData.monthlyWage * comp.value / 100) 
+            : comp.value;
+          const name = comp.name.padEnd(45);
+          textContent += `${name} ₹${amount.toLocaleString('en-IN')}\n`;
+        });
+      }
+
+      textContent += `
+                                                 -----------------
+Gross Salary:                                    ₹${(payslip.grossSalary || calculateGross()).toLocaleString('en-IN')}
+
+--------------------------------------------------------------------------------
+                            DEDUCTIONS
+--------------------------------------------------------------------------------
+
+PF (Employee Contribution):                      ₹${(payslip.deductions?.pfEmployee || 0).toLocaleString('en-IN')}
+Professional Tax:                                ₹${(payslip.deductions?.professionalTax || salaryData.deductions?.professionalTax || 0).toLocaleString('en-IN')}
+
+                                                 -----------------
+Total Deductions:                                ₹${(payslip.totalDeductions || calculateDeductions()).toLocaleString('en-IN')}
+
+================================================================================
+NET SALARY:                                      ₹${(payslip.netSalary || calculateNet()).toLocaleString('en-IN')}
+================================================================================
+
+Attendance Summary:
+- Days Present: ${payslip.attendance?.daysPresent || 'N/A'}
+- Days on Leave: ${payslip.attendance?.daysOnLeave || 'N/A'}
+- Working Days: ${payslip.attendance?.workingDays || 'N/A'}
+
+--------------------------------------------------------------------------------
+Bank Details:
+Account Number: ${payslip.bankDetails?.accountNumber || 'N/A'}
+Bank Name: ${payslip.bankDetails?.bankName || 'N/A'}
+IFSC Code: ${payslip.bankDetails?.ifscCode || 'N/A'}
+
+--------------------------------------------------------------------------------
+This is a computer-generated payslip and does not require a signature.
+Generated on: ${new Date().toLocaleString('en-IN')}
+================================================================================
+`;
       
       // Create download
-      const blob = new Blob([JSON.stringify(response.data.data, null, 2)], { type: 'application/json' });
+      const blob = new Blob([textContent], { type: 'text/plain' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `payslip_${currentMonth}.json`;
+      a.download = `Payslip_${monthName}_${currentYear}.txt`;
       a.click();
       window.URL.revokeObjectURL(url);
       
       toast.success('Payslip downloaded!');
     } catch (error) {
+      console.error('Payslip download error:', error);
       toast.error('Failed to download payslip');
     }
   };
