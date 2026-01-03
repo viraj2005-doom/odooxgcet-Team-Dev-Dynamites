@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { connectDB } from "./db";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import session from "express-session";
@@ -37,6 +38,8 @@ async function generateLoginId(companyCode: string, firstName: string, lastName:
 }
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+  // Connect to MongoDB
+  await connectDB();
   // Auth Setup
   const SessionStore = MemoryStore(session);
   app.use(session({
@@ -51,15 +54,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.use(passport.session());
 
   passport.use(new LocalStrategy({
-    usernameField: "loginId",
+    usernameField: "email",
     passwordField: "password"
-  }, async (loginId, password, done) => {
+  }, async (email, password, done) => {
     try {
-      const user = await storage.getUserByLoginId(loginId);
-      if (!user) return done(null, false, { message: "Invalid login ID" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) return done(null, false, { message: "Invalid email or password" });
+      
+      if (!user.emailVerified) {
+        return done(null, false, { message: "Please verify your email before logging in" });
+      }
       
       const isValid = await comparePasswords(password, user.password);
-      if (!isValid) return done(null, false, { message: "Invalid password" });
+      if (!isValid) return done(null, false, { message: "Invalid email or password" });
       
       return done(null, user);
     } catch (err) {
@@ -67,11 +74,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   }));
 
-  passport.serializeUser((user: any, done) => done(null, user.id));
-  passport.deserializeUser(async (id: number, done) => {
+  passport.serializeUser((user: any, done) => {
+    // Handle both Mongoose documents and plain objects
+    let userId: string;
+    if (user._id) {
+      // Mongoose document or object with _id
+      userId = typeof user._id === 'string' ? user._id : user._id.toString();
+    } else if (user.id) {
+      userId = typeof user.id === 'string' ? user.id : user.id.toString();
+    } else {
+      return done(new Error("User object missing _id or id"));
+    }
+    done(null, userId);
+  });
+  
+  passport.deserializeUser(async (id: string, done) => {
     try {
       const user = await storage.getUser(id);
-      done(null, user);
+      if (!user) {
+        return done(null, false);
+      }
+      // Convert Mongoose document to plain object
+      const userObj = user.toObject ? user.toObject() : user;
+      done(null, userObj);
     } catch (err) {
       done(err);
     }
@@ -79,47 +104,95 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Auth Routes
   app.post(api.auth.login.path, passport.authenticate("local"), (req, res) => {
-    res.json(req.user);
+    // Convert Mongoose document to plain object if needed
+    const user = req.user && typeof req.user.toObject === 'function' 
+      ? req.user.toObject() 
+      : req.user;
+    res.json(user);
   });
+
+  // Password validation
+  function validatePassword(password: string): { valid: boolean; message?: string } {
+    if (password.length < 8) {
+      return { valid: false, message: "Password must be at least 8 characters long" };
+    }
+    if (!/[a-z]/.test(password)) {
+      return { valid: false, message: "Password must contain at least one lowercase letter" };
+    }
+    if (!/[A-Z]/.test(password)) {
+      return { valid: false, message: "Password must contain at least one uppercase letter" };
+    }
+    if (!/\d/.test(password)) {
+      return { valid: false, message: "Password must contain at least one number" };
+    }
+    if (!/[@$!%*?&]/.test(password)) {
+      return { valid: false, message: "Password must contain at least one special character (@$!%*?&)" };
+    }
+    return { valid: true };
+  }
 
   app.post(api.auth.register.path, async (req, res) => {
     try {
-      const { companyName, adminName, email, phone, password } = req.body;
+      const { employeeId, email, password, role } = req.body;
       
-      // 1. Create Company
-      // Generate simple code (first 4 chars uppercase)
-      const code = companyName.substring(0, 4).toUpperCase();
-      const company = await storage.createCompany({
-        name: companyName,
-        code, // Check uniqueness in real app
-        email,
-        phone,
-      });
+      // Validate password
+      const passwordValidation = validatePassword(password);
+      if (!passwordValidation.valid) {
+        return res.status(400).json({ message: passwordValidation.message });
+      }
 
-      // 2. Create Admin
-      const [firstName, ...rest] = adminName.split(" ");
-      const lastName = rest.join(" ") || "Admin";
-      const year = new Date().getFullYear();
-      
-      const loginId = await generateLoginId(code, firstName, lastName, year);
+      // Check if email already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ message: "Email already registered" });
+      }
+
+      // Check if employee ID already exists
+      const existingEmployee = await storage.getUserByLoginId(employeeId);
+      if (existingEmployee) {
+        return res.status(400).json({ message: "Employee ID already exists" });
+      }
+
+      // Hash password
       const hashedPassword = await hashPassword(password);
 
-      const admin = await storage.createUser({
-        companyId: company.id,
-        loginId,
-        password: hashedPassword,
-        role: "admin",
-        firstName,
-        lastName,
-        email,
-        phone,
-        joiningDate: new Date().toISOString(),
-        monthlyWage: 0, // Admin might not have wage set initially
-      });
+      // Generate email verification token
+      const verificationToken = randomBytes(32).toString('hex');
+      const verificationExpires = new Date();
+      verificationExpires.setHours(verificationExpires.getHours() + 24); // Valid for 24 hours
 
-      req.login(admin, (err) => {
-        if (err) throw err;
-        res.status(201).json(admin);
+      // Create default company if needed (for standalone users)
+      // Or require company selection - for now, create a default company
+      let company = await storage.getCompanyByCode("DEFAULT");
+      if (!company) {
+        company = await storage.createCompany({
+          name: "Default Company",
+          code: "DEFAULT",
+          email: "admin@default.com",
+          phone: "000-000-0000",
+        });
+      }
+
+      // Create user
+      const user = await storage.createUser({
+        companyId: company._id.toString(),
+        loginId: employeeId,
+        password: hashedPassword,
+        role: role === "hr" ? "admin" : "employee", // Map hr to admin role
+        firstName: "", // Will be filled in profile
+        lastName: "", // Will be filled in profile
+        email,
+        phone: "",
+        joiningDate: new Date().toISOString(),
+        emailVerified: false,
+        emailVerificationToken: verificationToken,
+        emailVerificationExpires: verificationExpires,
+      } as any);
+
+      // In development, return token in response
+      res.status(201).json({
+        message: "Registration successful. Please verify your email.",
+        token: process.env.NODE_ENV === 'development' ? verificationToken : undefined,
       });
     } catch (err) {
       res.status(400).json({ message: (err as Error).message });
@@ -134,7 +207,69 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get(api.auth.me.path, (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    res.json(req.user);
+    // Convert Mongoose document to plain object if needed
+    const user = req.user && typeof req.user.toObject === 'function' 
+      ? req.user.toObject() 
+      : req.user;
+    res.json(user);
+  });
+
+  // Verify Email
+  app.post(api.auth.verifyEmail.path, async (req, res) => {
+    try {
+      const { token } = req.body;
+      const user = await storage.getUserByVerificationToken(token);
+
+      if (!user) {
+        return res.status(404).json({ message: "Invalid or expired verification token" });
+      }
+
+      // Mark email as verified
+      await storage.updateUser(user._id.toString(), {
+        emailVerified: true,
+        emailVerificationToken: undefined,
+        emailVerificationExpires: undefined,
+      } as any);
+
+      res.status(200).json({ message: "Email verified successfully. You can now login." });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to verify email" });
+    }
+  });
+
+  // Resend Verification Email
+  app.post(api.auth.resendVerification.path, async (req, res) => {
+    try {
+      const { email } = req.body;
+      const user = await storage.getUserByEmail(email);
+
+      if (!user) {
+        // Don't reveal if user exists
+        return res.status(200).json({ message: "If an account exists with this email, a verification token has been sent." });
+      }
+
+      if (user.emailVerified) {
+        return res.status(400).json({ message: "Email is already verified" });
+      }
+
+      // Generate new verification token
+      const verificationToken = randomBytes(32).toString('hex');
+      const verificationExpires = new Date();
+      verificationExpires.setHours(verificationExpires.getHours() + 24);
+
+      await storage.updateUser(user._id.toString(), {
+        emailVerificationToken: verificationToken,
+        emailVerificationExpires: verificationExpires,
+      } as any);
+
+      // In development, return token
+      res.status(200).json({
+        message: "Verification token sent. Check your email.",
+        token: process.env.NODE_ENV === 'development' ? verificationToken : undefined,
+      });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to resend verification" });
+    }
   });
 
   // Middleware
@@ -152,21 +287,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get(api.users.list.path, requireAuth, async (req, res) => {
     // Only return users from same company
     // @ts-ignore
-    const users = await storage.getUsersByCompany(req.user.companyId);
+    const users = await storage.getUsersByCompany(req.user.companyId.toString());
     res.json(users);
   });
 
   app.post(api.users.create.path, requireAdmin, async (req, res) => {
     try {
       // @ts-ignore
-      const company = await storage.getCompanyByCode(req.user.companyId); // Wait, need company code
-      // Better: get user's company first.
-      // @ts-ignore
-      const userCompany = await db.query.companies.findFirst({ where: eq(companies.id, req.user.companyId) });
+      const userCompany = await storage.getCompanyById(req.user.companyId.toString());
+      if (!userCompany) {
+        return res.status(404).json({ message: "Company not found" });
+      }
       
       const { firstName, lastName, joiningDate } = req.body;
       const year = new Date(joiningDate).getFullYear();
-      // @ts-ignore
       const loginId = await generateLoginId(userCompany.code, firstName, lastName, year);
       
       // Default password for new employees (e.g. "password123" or random)
@@ -177,7 +311,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const user = await storage.createUser({
         ...req.body,
         // @ts-ignore
-        companyId: req.user.companyId,
+        companyId: req.user.companyId.toString(),
         loginId,
         password: hashedPassword,
         role: "employee",
@@ -189,7 +323,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
   
   app.get(api.users.get.path, requireAuth, async (req, res) => {
-    const user = await storage.getUser(Number(req.params.id));
+    const user = await storage.getUser(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found" });
     res.json(user);
   });
@@ -197,14 +331,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Attendance
   app.post(api.attendance.checkIn.path, requireAuth, async (req, res) => {
     // @ts-ignore
-    const record = await storage.checkIn(req.user.id, new Date().toISOString().split('T')[0]);
+    const record = await storage.checkIn(req.user._id.toString(), new Date().toISOString().split('T')[0]);
     res.json(record);
   });
 
   app.post(api.attendance.checkOut.path, requireAuth, async (req, res) => {
     try {
       // @ts-ignore
-      const record = await storage.checkOut(req.user.id, new Date().toISOString().split('T')[0]);
+      const record = await storage.checkOut(req.user._id.toString(), new Date().toISOString().split('T')[0]);
       res.json(record);
     } catch (err) {
       res.status(400).json({ message: (err as Error).message });
@@ -216,12 +350,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (req.user.role === 'admin') {
       // Admin sees all for company
       // @ts-ignore
-      const records = await storage.getCompanyAttendance(req.user.companyId, req.query.date as string || new Date().toISOString().split('T')[0]);
+      const records = await storage.getCompanyAttendance(req.user.companyId.toString(), req.query.date as string || new Date().toISOString().split('T')[0]);
       res.json(records);
     } else {
       // Employee sees own
       // @ts-ignore
-      const records = await storage.getUserAttendanceRange(req.user.id, '2000-01-01', '2100-01-01'); // Simplified
+      const records = await storage.getUserAttendanceRange(req.user._id.toString(), '2000-01-01', '2100-01-01'); // Simplified
       res.json(records);
     }
   });
@@ -231,11 +365,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // @ts-ignore
     if (req.user.role === 'admin') {
       // @ts-ignore
-      const records = await storage.getCompanyLeaves(req.user.companyId);
+      const records = await storage.getCompanyLeaves(req.user.companyId.toString());
       res.json(records);
     } else {
       // @ts-ignore
-      const records = await storage.getUserLeaves(req.user.id);
+      const records = await storage.getUserLeaves(req.user._id.toString());
       res.json(records);
     }
   });
@@ -244,7 +378,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const leave = await storage.createLeave({
       ...req.body,
       // @ts-ignore
-      userId: req.user.id,
+      userId: req.user._id.toString(),
       daysCount: 1, // Calculate based on start/end
       status: 'pending'
     });
@@ -252,13 +386,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.patch(api.leaves.updateStatus.path, requireAdmin, async (req, res) => {
-    const leave = await storage.updateLeaveStatus(Number(req.params.id), req.body.status);
+    const leave = await storage.updateLeaveStatus(req.params.id, req.body.status);
     res.json(leave);
   });
 
   // Seeding Logic
-  const existingAdmin = await storage.getUserByLoginId("DAYFHA20241001");
-  if (!existingAdmin) {
+  const existingHR = await storage.getUserByEmail("hr@dayflow.com");
+  if (!existingHR) {
     console.log("Seeding database...");
     
     // Check/Create Company
@@ -272,42 +406,58 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         });
     }
 
-    // Create Admin
-    const adminPass = await hashPassword("admin123");
+    // Create HR User (with verified email)
+    const hrPass = await hashPassword("Hr@123456");
     await storage.createUser({
-        companyId: company.id,
-        loginId: "DAYFHA20241001",
-        password: adminPass,
-        role: "admin",
-        firstName: "Hr",
-        lastName: "Admin",
-        email: "admin@dayflow.com",
+        companyId: company._id.toString(),
+        loginId: "HR001",
+        password: hrPass,
+        role: "admin", // HR maps to admin role
+        firstName: "Sarah",
+        lastName: "Johnson",
+        email: "hr@dayflow.com",
         phone: "123-456-7890",
         joiningDate: new Date().toISOString(),
         monthlyWage: 500000,
         status: "active",
         jobPosition: "HR Manager",
-        department: "HR"
-    });
+        department: "HR",
+        emailVerified: true, // Pre-verified for seeding
+        emailVerificationToken: undefined,
+        emailVerificationExpires: undefined,
+    } as any);
 
-    // Create Employee
-    const empPass = await hashPassword("user123");
+    // Create Employee (with verified email)
+    const empPass = await hashPassword("Emp@123456");
     await storage.createUser({
-        companyId: company.id,
-        loginId: "DAYFJD20241002",
+        companyId: company._id.toString(),
+        loginId: "EMP001",
         password: empPass,
         role: "employee",
         firstName: "John",
         lastName: "Doe",
-        email: "john@dayflow.com",
+        email: "employee@dayflow.com",
         phone: "098-765-4321",
         joiningDate: new Date().toISOString(),
         monthlyWage: 300000,
         status: "active",
-        jobPosition: "Developer",
-        department: "Engineering"
-    });
+        jobPosition: "Software Developer",
+        department: "Engineering",
+        emailVerified: true, // Pre-verified for seeding
+        emailVerificationToken: undefined,
+        emailVerificationExpires: undefined,
+    } as any);
+    
     console.log("Database seeded successfully!");
+    console.log("HR User:");
+    console.log("  Email: hr@dayflow.com");
+    console.log("  Password: Hr@123456");
+    console.log("  Employee ID: HR001");
+    console.log("");
+    console.log("Employee User:");
+    console.log("  Email: employee@dayflow.com");
+    console.log("  Password: Emp@123456");
+    console.log("  Employee ID: EMP001");
   }
 
   return httpServer;

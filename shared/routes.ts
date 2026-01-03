@@ -12,24 +12,25 @@ export const api = {
     login: {
       method: 'POST' as const,
       path: '/api/auth/login',
-      input: z.object({ loginId: z.string(), password: z.string() }),
+      input: z.object({ email: z.string().email(), password: z.string() }),
       responses: {
         200: z.any(), // Returns user object
         401: errorSchemas.validation,
       }
     },
-    register: { // Company registration
+    register: { // User registration
       method: 'POST' as const,
       path: '/api/auth/register',
       input: z.object({
-        companyName: z.string(),
-        adminName: z.string(),
-        email: z.string(),
-        phone: z.string(),
-        password: z.string(),
+        employeeId: z.string().min(3),
+        email: z.string().email(),
+        password: z.string().min(8).regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, {
+          message: "Password must contain at least one uppercase, one lowercase, one number, and one special character"
+        }),
+        role: z.enum(["employee", "hr"]),
       }),
       responses: {
-        201: z.any(),
+        201: z.object({ message: z.string(), token: z.string().optional() }),
         400: errorSchemas.validation,
       }
     },
@@ -42,6 +43,25 @@ export const api = {
       method: 'GET' as const,
       path: '/api/user',
       responses: { 200: z.any() } // Returns user or 401
+    },
+    verifyEmail: {
+      method: 'POST' as const,
+      path: '/api/auth/verify-email',
+      input: z.object({ token: z.string() }),
+      responses: {
+        200: z.object({ message: z.string() }),
+        400: errorSchemas.validation,
+        404: errorSchemas.notFound,
+      }
+    },
+    resendVerification: {
+      method: 'POST' as const,
+      path: '/api/auth/resend-verification',
+      input: z.object({ email: z.string().email() }),
+      responses: {
+        200: z.object({ message: z.string() }),
+        404: errorSchemas.notFound,
+      }
     }
   },
   users: {

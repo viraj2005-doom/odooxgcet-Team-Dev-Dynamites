@@ -28,7 +28,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Initial based avatar fallback
-  const initials = user ? `${user.firstName[0]}${user.lastName[0]}` : "U";
+  const initials = user ? `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}` : "U";
 
   const navItems = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -86,7 +86,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
           </div>
 
           <div className="flex items-center gap-4">
-             {/* User Profile */}
+             {/* User Profile Dropdown */}
              <div className="flex items-center gap-3">
                <div className="hidden sm:flex flex-col items-end mr-1">
                   <span className="text-sm font-semibold">{user?.firstName} {user?.lastName}</span>
@@ -95,10 +95,12 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
                
                <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-10 w-10 rounded-full ring-2 ring-transparent hover:ring-primary/20 transition-all">
+                  <Button variant="ghost" className="relative h-10 w-10 rounded-full ring-2 ring-transparent hover:ring-primary/20 transition-all p-0">
                     <Avatar className="h-10 w-10 border border-border">
-                      <AvatarImage src={user?.avatarUrl || ""} alt={user?.firstName} />
-                      <AvatarFallback className="bg-primary/10 text-primary font-bold">{initials}</AvatarFallback>
+                      <AvatarImage src={user?.avatarUrl || ""} alt={`${user?.firstName} ${user?.lastName}`} />
+                      <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                        {user?.firstName?.[0] || ''}{user?.lastName?.[0] || ''}
+                      </AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
@@ -110,7 +112,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => window.location.href = `/users/${user?.id}`}>
+                  <DropdownMenuItem onClick={() => window.location.href = `/users/${user?._id || user?.id}`}>
                     <UserIcon className="mr-2 h-4 w-4" />
                     <span>My Profile</span>
                   </DropdownMenuItem>

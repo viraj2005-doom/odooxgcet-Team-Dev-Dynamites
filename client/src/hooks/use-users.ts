@@ -15,11 +15,11 @@ export function useUsers() {
   });
 }
 
-export function useUser(id: number) {
+export function useUser(id: string | number) {
   return useQuery({
     queryKey: [api.users.get.path, id],
     queryFn: async () => {
-      const url = buildUrl(api.users.get.path, { id });
+      const url = buildUrl(api.users.get.path, { id: String(id) });
       const res = await fetch(url, { credentials: "include" });
       if (res.status === 404) return null;
       if (!res.ok) throw new Error("Failed to fetch user");
@@ -61,8 +61,8 @@ export function useUpdateUser() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: number } & z.infer<typeof api.users.update.input>) => {
-      const url = buildUrl(api.users.update.path, { id });
+    mutationFn: async ({ id, ...updates }: { id: string | number } & z.infer<typeof api.users.update.input>) => {
+      const url = buildUrl(api.users.update.path, { id: String(id) });
       const res = await fetch(url, {
         method: api.users.update.method,
         headers: { "Content-Type": "application/json" },

@@ -6,7 +6,7 @@ import { useLocation } from "wouter";
 import { Plane, CheckCircle2, AlertCircle } from "lucide-react";
 
 interface EmployeeCardProps {
-  id: number;
+  id: string | number;
   firstName: string;
   lastName: string;
   role: string;
@@ -89,7 +89,9 @@ export function EmployeeCard({
       
       <CardFooter className="bg-muted/30 py-3 px-4 flex justify-between items-center text-xs text-muted-foreground border-t border-border/50">
         <span className="flex items-center gap-1.5">
-          ID: <span className="font-mono text-foreground/80">EMP-{id.toString().padStart(3, '0')}</span>
+          ID: <span className="font-mono text-foreground/80">
+            {id ? (typeof id === 'string' ? id.slice(-6).toUpperCase() : `EMP-${String(id).padStart(3, '0')}`) : 'N/A'}
+          </span>
         </span>
         <span className="font-medium text-primary/80 group-hover:text-primary hover:underline">View Profile →</span>
       </CardFooter>

@@ -11,19 +11,60 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { Mail, Phone, MapPin, Building, Calendar, DollarSign, Shield } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Mail, Phone, MapPin, Building, Calendar, DollarSign, Shield, Camera, Upload } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 
 export default function ProfilePage() {
   const [, params] = useRoute("/users/:id");
-  const userId = params ? parseInt(params.id) : null;
-  const { data: userProfile, isLoading } = useUser(userId || 0);
+  const userId = params?.id || null;
+  const { data: userProfile, isLoading } = useUser(userId || '');
   const { user: currentUser } = useAuth();
   const updateUser = useUpdateUser();
   const [activeTab, setActiveTab] = useState("resume");
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isEditable = currentUser?.role === 'admin' || currentUser?.id === userProfile?.id;
+  const isEditable = currentUser?.role === 'admin' || currentUser?._id === userProfile?._id || currentUser?.id === userProfile?._id;
   const isAdmin = currentUser?.role === 'admin';
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image size should be less than 5MB');
+      return;
+    }
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      setAvatarPreview(base64String);
+      
+      // Update user profile with new avatar
+      if (userProfile) {
+        updateUser.mutate({
+          id: userProfile._id || userProfile.id,
+          avatarUrl: base64String,
+        } as any);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAvatarClick = () => {
+    if (isEditable && fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
 
   if (isLoading) {
     return (
@@ -51,10 +92,30 @@ export default function ProfilePage() {
         <div className="relative">
           <div className="h-48 bg-gradient-to-r from-primary/80 to-accent/80 rounded-2xl shadow-lg" />
           <div className="absolute -bottom-16 left-8 flex items-end gap-6">
-            <Avatar className="h-32 w-32 border-4 border-background shadow-xl">
-              <AvatarImage src={userProfile.avatarUrl} />
-              <AvatarFallback className="text-4xl bg-muted">{userProfile.firstName[0]}</AvatarFallback>
-            </Avatar>
+            <div className="relative group">
+              <Avatar className="h-32 w-32 border-4 border-background shadow-xl">
+                <AvatarImage src={avatarPreview || userProfile.avatarUrl} />
+                <AvatarFallback className="text-4xl bg-muted">{userProfile.firstName[0]}{userProfile.lastName[0]}</AvatarFallback>
+              </Avatar>
+              {isEditable && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarChange}
+                    className="hidden"
+                  />
+                  <button
+                    onClick={handleAvatarClick}
+                    className="absolute bottom-0 right-0 h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg hover:bg-primary/90 transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+                    title="Upload profile picture"
+                  >
+                    <Camera className="h-5 w-5" />
+                  </button>
+                </>
+              )}
+            </div>
             <div className="mb-2">
               <h1 className="text-3xl font-bold text-foreground drop-shadow-sm">{userProfile.firstName} {userProfile.lastName}</h1>
               <div className="flex items-center gap-2 text-muted-foreground font-medium">
