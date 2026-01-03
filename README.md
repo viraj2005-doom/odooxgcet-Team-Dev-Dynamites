@@ -230,7 +230,8 @@ The Dayflow design uses a modern, professional color palette:
 
 ## 📄 License
 
-MIT License - feel free to use this project for your own purposes.
+Made By Viraj Solanki, Swayam Dalal, Palak Behl, and Priyanshi Baria.
+Feel free to use for projects.
 
 ## 🤝 Contributing
 
