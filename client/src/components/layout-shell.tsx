@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useAttendance, useCheckIn, useCheckOut } from "@/hooks/use-attendance";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,24 +18,64 @@ import {
   LayoutDashboard,
   LogOut,
   User as UserIcon,
-  Menu
+  Menu,
+  Clock
 } from "lucide-react";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { format } from "date-fns";
 
 export default function LayoutShell({ children }: { children: React.ReactNode }) {
   const { user, logoutMutation } = useAuth();
   const [location] = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { data: attendanceData } = useAttendance();
+  const checkIn = useCheckIn();
+  const checkOut = useCheckOut();
 
-  // Initial based avatar fallback
-  const initials = user ? `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}` : "U";
+  // Get today's attendance for check in/out button
+  const today = new Date().toISOString().split('T')[0];
+  const todayAttendance = attendanceData?.find((a: any) => {
+    const attDate = new Date(a.date).toISOString().split('T')[0];
+    return attDate === today;
+  });
+  const isCheckedIn = !!todayAttendance?.checkIn && !todayAttendance?.checkOut;
+  const isCheckedOut = !!todayAttendance?.checkOut;
 
-  const navItems = [
-    { href: "/", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/attendance", label: "Attendance", icon: CalendarCheck },
-    { href: "/leaves", label: "Time Off", icon: Plane },
-  ];
+  const handleCheckIn = () => {
+    if (!isCheckedIn && !isCheckedOut) {
+      checkIn.mutate();
+    }
+  };
+
+  const handleCheckOut = () => {
+    if (isCheckedIn && !isCheckedOut) {
+      checkOut.mutate();
+    }
+  };
+
+  // Format time for display
+  const formatTime = (dateString: string | Date) => {
+    try {
+      return format(new Date(dateString), 'hh:mm a');
+    } catch {
+      return '';
+    }
+  };
+
+  // Navigation items - different for HR/Admin
+  const isAdmin = user?.role === 'admin';
+  const navItems = isAdmin
+    ? [
+        { href: "/", label: "Employees", icon: Users },
+        { href: "/attendance", label: "Attendance", icon: CalendarCheck },
+        { href: "/leaves", label: "Timeoff", icon: Plane },
+      ]
+    : [
+        { href: "/", label: "Dashboard", icon: LayoutDashboard },
+        { href: "/attendance", label: "Attendance", icon: CalendarCheck },
+        { href: "/leaves", label: "Time Off", icon: Plane },
+      ];
 
   // Add Employees link only for Admin? Or visible to all but restricted actions? 
   // Requirement says "Dashboard (Home): Employees Grid". So it's the main view.
@@ -85,14 +126,60 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
             </nav>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+             {/* Check In/Out Dropdown Button - for HR/Admin */}
+             {isAdmin && (
+               <DropdownMenu>
+                 <DropdownMenuTrigger asChild>
+                   <Button
+                     variant="outline"
+                     size="sm"
+                     disabled={checkIn.isPending || checkOut.isPending}
+                     className={`transition-all ${
+                       isCheckedIn
+                         ? "bg-green-600 hover:bg-green-700 text-white border-green-600"
+                         : "bg-red-600 hover:bg-red-700 text-white border-red-600"
+                     }`}
+                   >
+                     <Clock className="mr-2 h-4 w-4" />
+                     {isCheckedIn ? "Checked In" : "Check In"}
+                   </Button>
+                 </DropdownMenuTrigger>
+                 <DropdownMenuContent align="end" className="w-48">
+                   <DropdownMenuItem
+                     onClick={handleCheckIn}
+                     disabled={isCheckedIn || isCheckedOut || checkIn.isPending}
+                     className="cursor-pointer"
+                   >
+                     <div className="flex flex-col w-full">
+                       <span className="font-medium">Check In</span>
+                       {todayAttendance?.checkIn && (
+                         <span className="text-xs text-muted-foreground">
+                           {formatTime(todayAttendance.checkIn)}
+                         </span>
+                       )}
+                     </div>
+                   </DropdownMenuItem>
+                   <DropdownMenuItem
+                     onClick={handleCheckOut}
+                     disabled={!isCheckedIn || isCheckedOut || checkOut.isPending}
+                     className="cursor-pointer"
+                   >
+                     <div className="flex flex-col w-full">
+                       <span className="font-medium">Check Out</span>
+                       {todayAttendance?.checkOut && (
+                         <span className="text-xs text-muted-foreground">
+                           {formatTime(todayAttendance.checkOut)}
+                         </span>
+                       )}
+                     </div>
+                   </DropdownMenuItem>
+                 </DropdownMenuContent>
+               </DropdownMenu>
+             )}
+
              {/* User Profile Dropdown */}
              <div className="flex items-center gap-3">
-               <div className="hidden sm:flex flex-col items-end mr-1">
-                  <span className="text-sm font-semibold">{user?.firstName} {user?.lastName}</span>
-                  <span className="text-xs text-muted-foreground capitalize">{user?.role}</span>
-               </div>
-               
                <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-10 w-10 rounded-full ring-2 ring-transparent hover:ring-primary/20 transition-all p-0">
@@ -114,7 +201,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => window.location.href = `/users/${user?._id || user?.id}`}>
                     <UserIcon className="mr-2 h-4 w-4" />
-                    <span>My Profile</span>
+                    <span>Profile</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem 
@@ -122,7 +209,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
                     onClick={() => logoutMutation.mutate()}
                   >
                     <LogOut className="mr-2 h-4 w-4" />
-                    <span>Log out</span>
+                    <span>Logout</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

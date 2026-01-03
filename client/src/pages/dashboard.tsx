@@ -327,123 +327,112 @@ function AdminDashboard() {
   );
 
   return (
-    <div className="space-y-8">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Team Overview</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage your employees and view their current status.
-          </p>
-        </div>
+    <div className="space-y-6">
+      {/* Action Bar - New Button and Search */}
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <DialogTrigger asChild>
+            <Button className="shrink-0 bg-primary hover:bg-primary/90">
+              <Plus className="mr-2 h-4 w-4" /> New
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Add New Employee</DialogTitle>
+              <DialogDescription>
+                Create a new employee profile. They will receive login credentials via email.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField control={form.control} name="firstName" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>First Name</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="lastName" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Last Name</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="email" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl><Input type="email" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="phone" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Phone</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="jobPosition" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Position</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="department" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Department</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="location" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Location</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="joiningDate" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Joining Date</FormLabel>
+                      <FormControl><Input type="date" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="monthlyWage" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Monthly Wage</FormLabel>
+                      <FormControl>
+                        <Input type="number" {...field} onChange={e => field.onChange(Number(e.target.value))} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                </div>
+                
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+                  <Button type="submit" disabled={createUser.isPending}>
+                    {createUser.isPending ? "Creating..." : "Create Profile"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
         
-        <div className="flex gap-3">
-           <div className="relative w-full md:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search employees..." 
-                className="pl-9 bg-background"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-           </div>
-           
-           {currentUser?.role === 'admin' && (
-             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-               <DialogTrigger asChild>
-                 <Button className="shrink-0 bg-primary hover:bg-primary/90">
-                   <Plus className="mr-2 h-4 w-4" /> New Employee
-                 </Button>
-               </DialogTrigger>
-               <DialogContent className="max-w-2xl">
-                 <DialogHeader>
-                   <DialogTitle>Add New Employee</DialogTitle>
-                   <DialogDescription>
-                     Create a new employee profile. They will receive login credentials via email.
-                   </DialogDescription>
-                 </DialogHeader>
-                 
-                 <Form {...form}>
-                   <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
-                     <div className="grid grid-cols-2 gap-4">
-                       <FormField control={form.control} name="firstName" render={({ field }) => (
-                         <FormItem>
-                           <FormLabel>First Name</FormLabel>
-                           <FormControl><Input {...field} /></FormControl>
-                           <FormMessage />
-                         </FormItem>
-                       )} />
-                       <FormField control={form.control} name="lastName" render={({ field }) => (
-                         <FormItem>
-                           <FormLabel>Last Name</FormLabel>
-                           <FormControl><Input {...field} /></FormControl>
-                           <FormMessage />
-                         </FormItem>
-                       )} />
-                       <FormField control={form.control} name="email" render={({ field }) => (
-                         <FormItem>
-                           <FormLabel>Email</FormLabel>
-                           <FormControl><Input type="email" {...field} /></FormControl>
-                           <FormMessage />
-                         </FormItem>
-                       )} />
-                       <FormField control={form.control} name="phone" render={({ field }) => (
-                         <FormItem>
-                           <FormLabel>Phone</FormLabel>
-                           <FormControl><Input {...field} /></FormControl>
-                           <FormMessage />
-                         </FormItem>
-                       )} />
-                       <FormField control={form.control} name="jobPosition" render={({ field }) => (
-                         <FormItem>
-                           <FormLabel>Position</FormLabel>
-                           <FormControl><Input {...field} /></FormControl>
-                           <FormMessage />
-                         </FormItem>
-                       )} />
-                       <FormField control={form.control} name="department" render={({ field }) => (
-                         <FormItem>
-                           <FormLabel>Department</FormLabel>
-                           <FormControl><Input {...field} /></FormControl>
-                           <FormMessage />
-                         </FormItem>
-                       )} />
-                       <FormField control={form.control} name="location" render={({ field }) => (
-                         <FormItem>
-                           <FormLabel>Location</FormLabel>
-                           <FormControl><Input {...field} /></FormControl>
-                           <FormMessage />
-                         </FormItem>
-                       )} />
-                       <FormField control={form.control} name="joiningDate" render={({ field }) => (
-                         <FormItem>
-                           <FormLabel>Joining Date</FormLabel>
-                           <FormControl><Input type="date" {...field} /></FormControl>
-                           <FormMessage />
-                         </FormItem>
-                       )} />
-                       <FormField control={form.control} name="monthlyWage" render={({ field }) => (
-                         <FormItem>
-                           <FormLabel>Monthly Wage</FormLabel>
-                           <FormControl>
-                             <Input type="number" {...field} onChange={e => field.onChange(Number(e.target.value))} />
-                           </FormControl>
-                           <FormMessage />
-                         </FormItem>
-                       )} />
-                     </div>
-                     
-                     <DialogFooter>
-                       <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
-                       <Button type="submit" disabled={createUser.isPending}>
-                          {createUser.isPending ? "Creating..." : "Create Profile"}
-                       </Button>
-                     </DialogFooter>
-                   </form>
-                 </Form>
-               </DialogContent>
-             </Dialog>
-           )}
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input 
+            placeholder="Search employees..." 
+            className="pl-9 bg-background"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
       </div>
 
@@ -482,7 +471,7 @@ function AdminDashboard() {
               jobPosition={employee.jobPosition}
               avatarUrl={employee.avatarUrl}
               status={employee.status}
-              attendanceStatus={employee.todayAttendance?.status || 'absent'}
+              attendanceStatus={employee.attendanceStatus || 'absent'}
             />
           ))}
         </div>

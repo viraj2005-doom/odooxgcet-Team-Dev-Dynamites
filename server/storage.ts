@@ -62,13 +62,16 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
-  async createUser(userData: InsertUser): Promise<IUser> {
+  async createUser(userData: InsertUser | any): Promise<IUser> {
     const user = new User({
       ...userData,
       companyId: userData.companyId ? new mongoose.Types.ObjectId(userData.companyId) : undefined,
       managerId: userData.managerId ? new mongoose.Types.ObjectId(userData.managerId) : undefined,
       joiningDate: userData.joiningDate ? new Date(userData.joiningDate) : new Date(),
       dob: userData.dob ? new Date(userData.dob) : undefined,
+      emailVerified: userData.emailVerified !== undefined ? userData.emailVerified : false,
+      emailVerificationToken: userData.emailVerificationToken,
+      emailVerificationExpires: userData.emailVerificationExpires,
     });
     return await user.save();
   }

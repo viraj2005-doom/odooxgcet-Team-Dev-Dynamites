@@ -62,22 +62,22 @@ export function EmployeeCard({
 
   return (
     <Card 
-      className="group hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden border-border/60"
+      className="group hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden border-border/60 relative"
       onClick={() => setLocation(`/users/${id}`)}
     >
+      {/* Status Indicator - Top Right Corner */}
+      <div className="absolute top-3 right-3 z-10">
+        {getStatusIndicator()}
+      </div>
+      
       <div className="h-24 bg-gradient-to-r from-primary/10 to-accent/10 group-hover:from-primary/20 group-hover:to-accent/20 transition-colors" />
       <CardContent className="pt-0 -mt-10 flex flex-col items-center pb-6">
-        <div className="relative">
-          <Avatar className="h-20 w-20 border-4 border-card shadow-md">
-            <AvatarImage src={avatarUrl} />
-            <AvatarFallback className="text-lg bg-muted text-muted-foreground">
-              {firstName[0]}{lastName[0]}
-            </AvatarFallback>
-          </Avatar>
-          <div className="absolute bottom-0 right-0 translate-x-1/4 translate-y-1/4">
-            {getStatusIndicator()}
-          </div>
-        </div>
+        <Avatar className="h-20 w-20 border-4 border-card shadow-md">
+          <AvatarImage src={avatarUrl} />
+          <AvatarFallback className="text-lg bg-muted text-muted-foreground">
+            {firstName[0]}{lastName[0]}
+          </AvatarFallback>
+        </Avatar>
         
         <div className="mt-4 text-center space-y-1">
           <h3 className="font-display font-bold text-lg leading-tight group-hover:text-primary transition-colors">

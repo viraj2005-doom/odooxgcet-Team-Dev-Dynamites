@@ -288,6 +288,52 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Only return users from same company
     // @ts-ignore
     const users = await storage.getUsersByCompany(req.user.companyId.toString());
+    
+    // For HR/Admin, include today's attendance and leave status
+    // @ts-ignore
+    if (req.user.role === 'admin') {
+      const today = new Date().toISOString().split('T')[0];
+      // @ts-ignore
+      const todayAttendance = await storage.getCompanyAttendance(req.user.companyId.toString(), today);
+      const todayLeaves = await storage.getCompanyLeaves(req.user.companyId.toString());
+      
+      // Filter approved leaves for today
+      const approvedLeavesToday = todayLeaves.filter((leave: any) => {
+        if (leave.status !== 'approved') return false;
+        const startDate = new Date(leave.startDate).toISOString().split('T')[0];
+        const endDate = new Date(leave.endDate).toISOString().split('T')[0];
+        return today >= startDate && today <= endDate;
+      });
+      
+      const usersWithStatus = users.map((user: any) => {
+        const userAttendance = todayAttendance.find((att: any) => 
+          att.userId?.toString() === user._id?.toString() || att.userId?.toString() === user.id?.toString()
+        );
+        const userLeave = approvedLeavesToday.find((leave: any) =>
+          leave.userId?.toString() === user._id?.toString() || leave.userId?.toString() === user.id?.toString()
+        );
+        
+        let attendanceStatus: "present" | "absent" | "leave" = "absent";
+        if (userLeave) {
+          attendanceStatus = "leave";
+        } else if (userAttendance && userAttendance.status === 'present') {
+          attendanceStatus = "present";
+        }
+        
+        return {
+          ...user.toObject ? user.toObject() : user,
+          todayAttendance: userAttendance ? {
+            status: userAttendance.status,
+            checkIn: userAttendance.checkIn,
+            checkOut: userAttendance.checkOut
+          } : null,
+          attendanceStatus
+        };
+      });
+      
+      return res.json(usersWithStatus);
+    }
+    
     res.json(users);
   });
 
@@ -392,20 +438,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Seeding Logic
   const existingHR = await storage.getUserByEmail("hr@dayflow.com");
+  const existingEmp = await storage.getUserByEmail("employee@dayflow.com");
+  
+  // Check/Create Company
+  let company = await storage.getCompanyByCode("DAYF");
+  if (!company) {
+      company = await storage.createCompany({
+          name: "Dayflow Inc.",
+          code: "DAYF",
+          email: "contact@dayflow.com",
+          phone: "123-456-7890",
+      });
+  }
+
   if (!existingHR) {
     console.log("Seeding database...");
     
-    // Check/Create Company
-    let company = await storage.getCompanyByCode("DAYF");
-    if (!company) {
-        company = await storage.createCompany({
-            name: "Dayflow Inc.",
-            code: "DAYF",
-            email: "contact@dayflow.com",
-            phone: "123-456-7890",
-        });
-    }
-
     // Create HR User (with verified email)
     const hrPass = await hashPassword("Hr@123456");
     await storage.createUser({
@@ -426,7 +474,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         emailVerificationToken: undefined,
         emailVerificationExpires: undefined,
     } as any);
+  } else if (!existingHR.emailVerified) {
+    // Fix existing HR user if email not verified
+    await storage.updateUser(existingHR._id.toString(), {
+      emailVerified: true,
+      emailVerificationToken: undefined,
+      emailVerificationExpires: undefined,
+    } as any);
+    console.log("Updated HR user email verification status");
+  }
 
+  if (!existingEmp) {
     // Create Employee (with verified email)
     const empPass = await hashPassword("Emp@123456");
     await storage.createUser({
@@ -447,7 +505,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         emailVerificationToken: undefined,
         emailVerificationExpires: undefined,
     } as any);
-    
+  } else if (!existingEmp.emailVerified) {
+    // Fix existing Employee user if email not verified
+    await storage.updateUser(existingEmp._id.toString(), {
+      emailVerified: true,
+      emailVerificationToken: undefined,
+      emailVerificationExpires: undefined,
+    } as any);
+    console.log("Updated Employee user email verification status");
+  }
+  
+  if (!existingHR || !existingEmp) {
     console.log("Database seeded successfully!");
     console.log("HR User:");
     console.log("  Email: hr@dayflow.com");
